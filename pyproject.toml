@@ -1,0 +1,38 @@
+[project]
+name = "slack-lists-mcp"
+version = "0.1.0"
+description = "MCP server to operate Slack Lists"
+readme = "README.md"
+authors = [
+    { name = "papasim824", email = "papasim824@gmail.co.jp" }
+]
+requires-python = ">=3.12"
+license = { text = "MIT" }
+keywords = ["mcp", "slack", "lists", "api"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: MIT License",
+]
+homepage = "https://github.com/ppspps824/slack-lists-mcp"
+dependencies = [
+    "fastmcp>=2.12.4",
+    "slack-sdk>=3.36.0",
+    "pydantic>=2.11.9",
+    "pydantic-settings>=2.11.0",
+    "python-dotenv>=1.0.1",
+]
+
+[project.scripts]
+slack-lists-mcp = "slack_lists_mcp:main"
+
+[build-system]
+requires = ["uv_build>=0.8.19,<0.9.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.2",
+    "pytest-asyncio>=1.2.0",
+    "ruff>=0.13.2",
+]
