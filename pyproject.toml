@@ -11,10 +11,13 @@ license = { text = "MIT" }
 keywords = ["mcp", "slack", "lists", "api"]
 classifiers = [
     "Development Status :: 3 - Alpha",
+    "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Communications :: Chat",
 ]
-homepage = "https://github.com/ppspps824/slack-lists-mcp"
 dependencies = [
     "fastmcp>=2.12.4",
     "slack-sdk>=3.36.0",
@@ -22,6 +25,11 @@ dependencies = [
     "pydantic-settings>=2.11.0",
     "python-dotenv>=1.0.1",
 ]
+
+[project.urls]
+Homepage = "https://github.com/ppspps824/slack-lists-mcp"
+Repository = "https://github.com/ppspps824/slack-lists-mcp"
+Issues = "https://github.com/ppspps824/slack-lists-mcp/issues"
 
 [project.scripts]
 slack-lists-mcp = "slack_lists_mcp:main"

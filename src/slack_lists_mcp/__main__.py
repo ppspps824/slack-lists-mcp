@@ -3,8 +3,8 @@
 import logging
 import sys
 
-from .config import get_settings
-from .server import mcp
+from slack_lists_mcp.config import get_settings
+from slack_lists_mcp.server import mcp
 
 
 def main():

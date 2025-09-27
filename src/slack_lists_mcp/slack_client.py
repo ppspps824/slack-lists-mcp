@@ -6,8 +6,8 @@ from typing import Any
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 
-from .config import get_settings
-from .models import ErrorResponse
+from slack_lists_mcp.config import get_settings
+from slack_lists_mcp.models import ErrorResponse
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +57,60 @@ class SlackListsClient:
             details=error_details,
         )
 
+    def _normalize_fields(self, fields: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Normalize field formats for better API usability.
+
+        Handles common format issues:
+        - Wraps select field values in arrays if not already
+        - Wraps user field values in arrays if not already
+        - Ensures rich_text fields have proper structure
+
+        Args:
+            fields: List of field dictionaries to normalize
+
+        Returns:
+            Normalized field list
+
+        """
+        normalized = []
+        for field in fields:
+            # Create a copy to avoid mutating the original
+            normalized_field = field.copy()
+
+            # Handle select fields - wrap single values in array
+            if "select" in normalized_field and not isinstance(
+                normalized_field["select"],
+                list,
+            ):
+                normalized_field["select"] = [normalized_field["select"]]
+
+            # Handle user fields - wrap single values in array
+            if "user" in normalized_field and not isinstance(
+                normalized_field["user"],
+                list,
+            ):
+                normalized_field["user"] = [normalized_field["user"]]
+
+            # Handle text fields by converting to rich_text if needed
+            if "text" in normalized_field and "rich_text" not in normalized_field:
+                # Convert plain text to rich_text format
+                text_value = normalized_field.pop("text")
+                normalized_field["rich_text"] = [
+                    {
+                        "type": "rich_text",
+                        "elements": [
+                            {
+                                "type": "rich_text_section",
+                                "elements": [{"type": "text", "text": str(text_value)}],
+                            },
+                        ],
+                    },
+                ]
+
+            normalized.append(normalized_field)
+
+        return normalized
+
     async def add_item(
         self,
         list_id: str,
@@ -90,7 +144,15 @@ class SlackListsClient:
                 },
                 {
                     "column_id": "Col456",
-                    "user": ["U123456"]
+                    "user": ["U123456"]  # user fields expect an array
+                },
+                {
+                    "column_id": "Col789",
+                    "select": ["OptABC123"]  # select fields also expect an array
+                },
+                {
+                    "column_id": "Col012",
+                    "checkbox": False  # checkbox is a boolean
                 }
             ]
 
@@ -99,14 +161,17 @@ class SlackListsClient:
             if not initial_fields:
                 raise ValueError("At least one field must be provided")
 
+            # Normalize field formats for better usability
+            normalized_fields = self._normalize_fields(initial_fields)
+
             logger.debug(
-                f"Creating item with {len(initial_fields)} fields in list {list_id}",
+                f"Creating item with {len(normalized_fields)} fields in list {list_id}",
             )
             response = self.client.api_call(
                 api_method="slackLists.items.create",
                 json={
                     "list_id": list_id,
-                    "initial_fields": initial_fields,
+                    "initial_fields": normalized_fields,
                 },
             )
 
@@ -161,6 +226,16 @@ class SlackListsClient:
                     "row_id": "Rec123",
                     "column_id": "Col456",
                     "checkbox": True
+                },
+                {
+                    "row_id": "Rec123",
+                    "column_id": "Col789",
+                    "select": ["OptABC123"]  # select fields expect an array
+                },
+                {
+                    "row_id": "Rec123",
+                    "column_id": "Col012",
+                    "user": ["U123456"]  # user fields expect an array
                 }
             ]
 
@@ -169,14 +244,17 @@ class SlackListsClient:
             if not cells:
                 raise ValueError("At least one cell must be provided")
 
+            # Normalize field formats for better usability
+            normalized_cells = self._normalize_fields(cells)
+
             logger.info(
-                f"Updating {len(cells)} cells in list {list_id}",
+                f"Updating {len(normalized_cells)} cells in list {list_id}",
             )
             response = self.client.api_call(
                 api_method="slackLists.items.update",
                 json={
                     "list_id": list_id,
-                    "cells": cells,
+                    "cells": normalized_cells,
                 },
             )
 
@@ -360,7 +438,9 @@ class SlackListsClient:
             raise
 
     def _matches_filters(
-        self, item: dict[str, Any], filters: dict[str, dict[str, Any]]
+        self,
+        item: dict[str, Any],
+        filters: dict[str, dict[str, Any]],
     ) -> bool:
         """Check if an item matches all filter conditions.
 

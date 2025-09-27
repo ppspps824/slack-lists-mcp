@@ -69,7 +69,32 @@ Add a new item to a Slack List.
 - `list_id` (required): The ID of the list
 - `initial_fields` (required): Array of field objects with column_id and value
 
-**Example:**
+**Example (Simplified format):**
+```json
+{
+  "list_id": "F1234567890",
+  "initial_fields": [
+    {
+      "column_id": "Col123",
+      "text": "Task Name"  // Simple text format
+    },
+    {
+      "column_id": "Col456",
+      "select": "OptABC123"  // Single select value
+    },
+    {
+      "column_id": "Col789",
+      "user": "U1234567"  // Single user ID
+    },
+    {
+      "column_id": "Col012",
+      "checkbox": false
+    }
+  ]
+}
+```
+
+**Example (Full rich_text format - also supported):**
 ```json
 {
   "list_id": "F1234567890",
@@ -83,6 +108,10 @@ Add a new item to a Slack List.
           "elements": [{"type": "text", "text": "Task Name"}]
         }]
       }]
+    },
+    {
+      "column_id": "Col456",
+      "select": ["OptABC123"]  // Array format
     }
   ]
 }
@@ -95,15 +124,31 @@ Update existing items in a Slack List.
 - `list_id` (required): The ID of the list
 - `cells` (required): Array of cell objects with row_id, column_id, and value
 
-**Example:**
+**Field Formats:** (Same as add_list_item)
+- **Text fields**: Can use simple `text` key (auto-converted to rich_text)
+- **Select fields**: Can use single value (auto-wrapped in array)
+- **User fields**: Can use single user ID (auto-wrapped in array)
+- **Checkbox fields**: Boolean value
+
+**Example (Simplified format):**
 ```json
 {
   "list_id": "F1234567890",
   "cells": [
     {
       "row_id": "Rec123",
+      "column_id": "Col123",
+      "text": "Updated Task Name"  // Simple text format
+    },
+    {
+      "row_id": "Rec123",
       "column_id": "Col456",
       "checkbox": true
+    },
+    {
+      "row_id": "Rec123",
+      "column_id": "Col789",
+      "select": "OptXYZ456"  // Single select value
     }
   ]
 }
@@ -160,7 +205,6 @@ Get metadata about a Slack List.
 **Parameters:**
 - `list_id` (required): The ID of the list
 
-
 ## Development
 
 ### Setup
@@ -178,7 +222,7 @@ uv sync
 
 ```bash
 # Run with FastMCP dev mode (with auto-reload)
-fastmcp dev slack_lists_mcp.server:mcp
+uv run fastmcp dev src/slack_lists_mcp/server.py:mcp
 
 # Or run directly
 uv run slack-lists-mcp

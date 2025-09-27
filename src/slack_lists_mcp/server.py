@@ -5,8 +5,8 @@ from typing import Any
 
 from fastmcp import Context, FastMCP
 
-from .config import get_settings
-from .slack_client import SlackListsClient
+from slack_lists_mcp.config import get_settings
+from slack_lists_mcp.slack_client import SlackListsClient
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -52,19 +52,33 @@ async def add_list_item(
         initial_fields = [
             {
                 "column_id": "Col123",
-                "rich_text": [{
-                    "type": "rich_text",
-                    "elements": [{
-                        "type": "rich_text_section",
-                        "elements": [{"type": "text", "text": "Task Name"}]
-                    }]
-                }]
+                "text": "Task Name"  # Plain text will be auto-converted to rich_text
             },
             {
                 "column_id": "Col456",
                 "checkbox": False
+            },
+            {
+                "column_id": "Col789",
+                "select": "OptABC123"  # Single value will be auto-wrapped in array
+            },
+            {
+                "column_id": "Col012",
+                "user": "U123456"  # Single user ID will be auto-wrapped in array
             }
         ]
+
+        # Alternative: You can also provide the full rich_text format:
+        {
+            "column_id": "Col123",
+            "rich_text": [{
+                "type": "rich_text",
+                "elements": [{
+                    "type": "rich_text_section",
+                    "elements": [{"type": "text", "text": "Task Name"}]
+                }]
+            }]
+        }
 
     """
     try:
@@ -122,18 +136,22 @@ async def update_list_item(
             {
                 "row_id": "Rec123",
                 "column_id": "Col123",
-                "rich_text": [{
-                    "type": "rich_text",
-                    "elements": [{
-                        "type": "rich_text_section",
-                        "elements": [{"type": "text", "text": "Updated Name"}]
-                    }]
-                }]
+                "text": "Updated Name"  # Plain text will be auto-converted to rich_text
             },
             {
                 "row_id": "Rec123",
                 "column_id": "Col456",
                 "checkbox": True
+            },
+            {
+                "row_id": "Rec123",
+                "column_id": "Col789",
+                "select": "OptXYZ456"  # Single value will be auto-wrapped in array
+            },
+            {
+                "row_id": "Rec123",
+                "column_id": "Col012",
+                "user": "U789012"  # Single user ID will be auto-wrapped in array
             }
         ]
 
@@ -302,7 +320,7 @@ async def list_items(
 
         if ctx:
             await ctx.info(
-                f"Retrieved {len(response.get('items', []))} items from list {list_id}"
+                f"Retrieved {len(response.get('items', []))} items from list {list_id}",
             )
 
         return {

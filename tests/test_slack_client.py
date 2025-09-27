@@ -1,7 +1,6 @@
 """Tests for the SlackListsClient."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
-from typing import Any
+from unittest.mock import MagicMock, patch
 
 import pytest
 from slack_sdk.errors import SlackApiError
@@ -36,10 +35,10 @@ async def test_add_item(mock_slack_client):
                 "id": "Rec123",
                 "list_id": "F123",
                 "fields": [
-                    {"column_id": "Col123", "text": "Test Item"}
+                    {"column_id": "Col123", "text": "Test Item"},
                 ],
             },
-        }
+        },
     )
 
     client = SlackListsClient()
@@ -57,11 +56,11 @@ async def test_add_item(mock_slack_client):
                             {
                                 "type": "rich_text_section",
                                 "elements": [{"type": "text", "text": "Test Item"}],
-                            }
+                            },
                         ],
-                    }
+                    },
                 ],
-            }
+            },
         ],
     )
 
@@ -80,11 +79,11 @@ async def test_add_item(mock_slack_client):
                                 {
                                     "type": "rich_text_section",
                                     "elements": [{"type": "text", "text": "Test Item"}],
-                                }
+                                },
                             ],
-                        }
+                        },
                     ],
-                }
+                },
             ],
         },
     )
@@ -94,7 +93,7 @@ async def test_add_item(mock_slack_client):
 async def test_update_item(mock_slack_client):
     """Test updating items in a list."""
     mock_slack_client.api_call = MagicMock(
-        return_value={"ok": True}
+        return_value={"ok": True},
     )
 
     client = SlackListsClient()
@@ -107,7 +106,7 @@ async def test_update_item(mock_slack_client):
                 "row_id": "Rec123",
                 "column_id": "Col123",
                 "text": "Updated Item",
-            }
+            },
         ],
     )
 
@@ -120,8 +119,20 @@ async def test_update_item(mock_slack_client):
                 {
                     "row_id": "Rec123",
                     "column_id": "Col123",
-                    "text": "Updated Item",
-                }
+                    "rich_text": [
+                        {
+                            "type": "rich_text",
+                            "elements": [
+                                {
+                                    "type": "rich_text_section",
+                                    "elements": [
+                                        {"type": "text", "text": "Updated Item"}
+                                    ],
+                                }
+                            ],
+                        }
+                    ],
+                },
             ],
         },
     )
@@ -131,7 +142,7 @@ async def test_update_item(mock_slack_client):
 async def test_delete_item(mock_slack_client):
     """Test deleting an item from a list."""
     mock_slack_client.api_call = MagicMock(
-        return_value={"ok": True}
+        return_value={"ok": True},
     )
 
     client = SlackListsClient()
@@ -159,11 +170,11 @@ async def test_get_item(mock_slack_client):
             "record": {
                 "id": "Rec123",
                 "fields": [
-                    {"column_id": "Col123", "text": "Test Item"}
+                    {"column_id": "Col123", "text": "Test Item"},
                 ],
             },
             "list": {"list_metadata": {"schema": []}},
-        }
+        },
     )
 
     client = SlackListsClient()
@@ -194,7 +205,7 @@ async def test_list_items_without_filters(mock_slack_client):
                 {"id": "Rec1", "fields": []},
                 {"id": "Rec2", "fields": []},
             ],
-        }
+        },
     )
 
     client = SlackListsClient()
@@ -234,7 +245,7 @@ async def test_list_items_with_filters(mock_slack_client):
                     ],
                 },
             ],
-        }
+        },
     )
 
     client = SlackListsClient()
@@ -248,7 +259,7 @@ async def test_list_items_with_filters(mock_slack_client):
     # Only the first item should match the filter
     assert len(result["items"]) == 1
     assert result["items"][0]["id"] == "Rec1"
-    
+
     # Should request more items when filtering
     mock_slack_client.api_call.assert_called_once_with(
         api_method="slackLists.items.list",
@@ -260,98 +271,117 @@ async def test_list_items_with_filters(mock_slack_client):
 async def test_filter_matching_logic():
     """Test the filter matching logic directly."""
     client = SlackListsClient()
-    
+
     # Test equals operator
     item = {
         "fields": [
             {"key": "status", "select": ["active"]},
             {"key": "name", "text": "Test Item"},
-        ]
+        ],
     }
-    
+
     assert client._matches_filters(item, {"status": {"equals": "active"}}) is True
     assert client._matches_filters(item, {"status": {"equals": "inactive"}}) is False
-    
+
     # Test contains operator
     assert client._matches_filters(item, {"name": {"contains": "Test"}}) is True
-    assert client._matches_filters(item, {"name": {"contains": "test"}}) is True  # Case-insensitive
+    assert (
+        client._matches_filters(item, {"name": {"contains": "test"}}) is True
+    )  # Case-insensitive
     assert client._matches_filters(item, {"name": {"contains": "Other"}}) is False
-    
+
     # Test not_equals operator
     assert client._matches_filters(item, {"status": {"not_equals": "inactive"}}) is True
     assert client._matches_filters(item, {"status": {"not_equals": "active"}}) is False
-    
+
     # Test not_contains operator
     assert client._matches_filters(item, {"name": {"not_contains": "Other"}}) is True
     assert client._matches_filters(item, {"name": {"not_contains": "Test"}}) is False
-    
+
     # Test in operator
-    assert client._matches_filters(item, {"status": {"in": ["active", "pending"]}}) is True
-    assert client._matches_filters(item, {"status": {"in": ["inactive", "pending"]}}) is False
-    
+    assert (
+        client._matches_filters(item, {"status": {"in": ["active", "pending"]}}) is True
+    )
+    assert (
+        client._matches_filters(item, {"status": {"in": ["inactive", "pending"]}})
+        is False
+    )
+
     # Test not_in operator
-    assert client._matches_filters(item, {"status": {"not_in": ["inactive", "pending"]}}) is True
-    assert client._matches_filters(item, {"status": {"not_in": ["active", "pending"]}}) is False
-    
+    assert (
+        client._matches_filters(item, {"status": {"not_in": ["inactive", "pending"]}})
+        is True
+    )
+    assert (
+        client._matches_filters(item, {"status": {"not_in": ["active", "pending"]}})
+        is False
+    )
+
     # Test multiple filters (AND logic)
-    assert client._matches_filters(
-        item, 
-        {
-            "status": {"equals": "active"},
-            "name": {"contains": "Test"},
-        }
-    ) is True
-    
-    assert client._matches_filters(
-        item,
-        {
-            "status": {"equals": "active"},
-            "name": {"contains": "Other"},
-        }
-    ) is False
+    assert (
+        client._matches_filters(
+            item,
+            {
+                "status": {"equals": "active"},
+                "name": {"contains": "Test"},
+            },
+        )
+        is True
+    )
+
+    assert (
+        client._matches_filters(
+            item,
+            {
+                "status": {"equals": "active"},
+                "name": {"contains": "Other"},
+            },
+        )
+        is False
+    )
 
 
 @pytest.mark.asyncio
 async def test_field_value_extraction():
     """Test the field value extraction logic."""
     client = SlackListsClient()
-    
+
     # Test checkbox field
     field = {"checkbox": True}
     assert client._extract_field_value(field) is True
-    
+
     # Test select field
     field = {"select": ["option1"]}
     assert client._extract_field_value(field) == ["option1"]
-    
+
     # Test user field
     field = {"user": ["U123"]}
     assert client._extract_field_value(field) == ["U123"]
-    
+
     # Test date field
     field = {"date": ["2024-01-01"]}
     assert client._extract_field_value(field) == ["2024-01-01"]
-    
+
     # Test text field
     field = {"text": "Test Text"}
     assert client._extract_field_value(field) == "Test Text"
-    
+
     # Test number field
     field = {"number": [42]}
     assert client._extract_field_value(field) == [42]
-    
+
     # Test email field
     field = {"email": ["test@example.com"]}
     assert client._extract_field_value(field) == ["test@example.com"]
-    
+
     # Test phone field
     field = {"phone": ["+1234567890"]}
     assert client._extract_field_value(field) == ["+1234567890"]
-    
+
     # Test fallback to value field
     field = {"value": "fallback"}
     assert client._extract_field_value(field) == "fallback"
-    
+
     # Test empty field
     field = {}
     assert client._extract_field_value(field) is None
@@ -376,7 +406,7 @@ async def test_get_list(mock_slack_client):
                     "title": "Test List Title",
                 },
             },
-        ]
+        ],
     )
 
     client = SlackListsClient()
@@ -396,7 +426,7 @@ async def test_get_list_empty(mock_slack_client):
         return_value={
             "ok": True,
             "items": [],
-        }
+        },
     )
 
     client = SlackListsClient()
@@ -426,14 +456,14 @@ async def test_error_handling(mock_slack_client):
     mock_response.get = lambda key, default=None: {
         "error": "list_not_found",
         "error_message": "List not found",
-        "ok": False
+        "ok": False,
     }.get(key, default)
-    
+
     mock_slack_client.api_call = MagicMock(
         side_effect=SlackApiError(
             message="The request to the Slack API failed.",
             response=mock_response,
-        )
+        ),
     )
 
     client = SlackListsClient()
