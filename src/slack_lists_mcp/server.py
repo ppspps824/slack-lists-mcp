@@ -3,6 +3,7 @@
 import logging
 from typing import Any
 
+import httpx
 from fastmcp import Context, FastMCP
 
 from slack_lists_mcp.config import get_settings
@@ -28,6 +29,38 @@ mcp = FastMCP(
 slack_client = SlackListsClient()
 
 
+async def fetch_slack_documentation(url: str) -> dict[str, Any]:
+    """Slack APIドキュメントをフェッチして解析する。
+
+    Args:
+        url: Slack APIドキュメントのURL
+
+    Returns:
+        解析されたドキュメント情報
+
+    """
+    try:
+        async with httpx.AsyncClient(follow_redirects=True) as client:
+            response = await client.get(url)
+            response.raise_for_status()
+
+            # HTMLコンテンツをそのまま返す（LLMが解析する）
+            return {
+                "url": str(response.url),  # リダイレクト後の最終URL
+                "original_url": url,
+                "status_code": response.status_code,
+                "content_length": len(response.content),
+                "html_content": response.text,
+                "message": "ドキュメントが正常に取得されました",
+            }
+    except Exception as e:
+        logger.error(f"ドキュメント取得エラー: {e}")
+        return {
+            "error": str(e),
+            "url": url,
+        }
+
+
 @mcp.tool
 async def add_list_item(
     initial_fields: list[dict[str, Any]],
@@ -43,6 +76,7 @@ async def add_list_item(
                        - column_id: The column ID
                        - Value in appropriate format (rich_text, user, date, select, checkbox, etc.)
         list_id: The ID of the list (optional, uses DEFAULT_LIST_ID env var if not provided)
+                 When DEFAULT_LIST_ID is set, you can omit this parameter entirely
         ctx: FastMCP context (automatically injected)
 
     Returns:
@@ -135,6 +169,7 @@ async def update_list_item(
                - column_id: The column ID
                - Value in appropriate format (rich_text, user, date, select, checkbox, etc.)
         list_id: The ID of the list (optional, uses DEFAULT_LIST_ID env var if not provided)
+                 When DEFAULT_LIST_ID is set, you can omit this parameter entirely
         ctx: FastMCP context (automatically injected)
 
     Returns:
@@ -228,7 +263,7 @@ async def delete_list_item(
         if ctx:
             await ctx.info(f"Deleting item {item_id} from list {list_id}")
 
-        result = await slack_client.delete_item(
+        await slack_client.delete_item(
             list_id=list_id,
             item_id=item_id,
         )
@@ -551,6 +586,64 @@ async def get_list_structure(
         }
 
 
+@mcp.tool
+async def get_schema_documentation(
+    api_method: str = "slackLists.items.create",
+    ctx: Context = None,
+) -> dict[str, Any]:
+    """Slack Lists APIのスキーマ情報とドキュメントを取得する。
+
+    Args:
+        api_method: 取得したいAPIメソッド（例: slackLists.items.create）
+        ctx: FastMCP context (automatically injected)
+
+    Returns:
+        スキーマ情報とドキュメントの詳細
+
+    """
+    try:
+        if ctx:
+            await ctx.info(f"スキーマ情報を取得中: {api_method}")
+
+        # Slack APIドキュメントのURLを構築
+        doc_url = f"https://docs.slack.dev/reference/methods/{api_method}"
+
+        # ドキュメントをフェッチ
+        doc_info = await fetch_slack_documentation(doc_url)
+
+        if "error" in doc_info:
+            error_msg = f"ドキュメント取得エラー: {doc_info['error']}"
+            if ctx:
+                await ctx.error(error_msg)
+            return {
+                "success": False,
+                "error": error_msg,
+            }
+
+        if ctx:
+            await ctx.info("スキーマ情報の取得が完了しました")
+
+        return {
+            "success": True,
+            "api_method": api_method,
+            "documentation_url": doc_info.get("url", doc_url),
+            "original_url": doc_info.get("original_url", doc_url),
+            "html_content": doc_info.get("html_content", ""),
+            "content_length": doc_info.get("content_length", 0),
+            "status_code": doc_info.get("status_code", 200),
+            "message": "Slack APIドキュメントを取得しました。HTMLコンテンツをLLMが解析してスキーマ情報を抽出できます。",
+        }
+
+    except Exception as e:
+        logger.error(f"スキーマ情報取得エラー: {e}")
+        if ctx:
+            await ctx.error(f"スキーマ情報の取得に失敗しました: {e!s}")
+        return {
+            "success": False,
+            "error": str(e),
+        }
+
+
 # Add a resource to show server information
 @mcp.resource("resource://server/info")
 def get_server_info() -> dict[str, Any]:
@@ -572,6 +665,7 @@ def get_server_info() -> dict[str, Any]:
             "get_list_info",
             "get_list_structure",
             "create_list",
+            "get_schema_documentation",
         ],
     }
 
@@ -583,19 +677,29 @@ def list_operations_guide() -> str:
     return """
 # Slack Lists Operations Guide
 
+## IMPORTANT: DEFAULT_LIST_ID is automatically used!
+When `DEFAULT_LIST_ID` environment variable is set, you can omit the `list_id` parameter from all tool calls. The system will automatically use the configured default list.
+
 ## IMPORTANT: Always start by getting list structure!
 Before adding or updating items, use `get_list_structure` to understand the column IDs and types.
 
 ## Available Operations:
 
-### 1. Get List Structure (REQUIRED FIRST)
+### 1. Get Schema Documentation
+Use `get_schema_documentation` to fetch the latest Slack API documentation.
+- Required: api_method (default: "slackLists.items.create")
+- Returns: HTML content from Slack API docs that LLM can parse for field types and examples
+- This provides the most up-to-date information about field formats
+
+### 2. Get List Structure (REQUIRED FIRST)
 Use `get_list_structure` to get column definitions for a list.
 - Required: list_id
 - Returns: Column IDs, names, types, and options needed for adding/updating items
 
-### 2. Add Item to List
+### 3. Add Item to List
 Use `add_list_item` to add a new item with raw field structure.
-- Required: list_id, initial_fields
+- Required: initial_fields
+- Optional: list_id (uses DEFAULT_LIST_ID if not provided)
 - initial_fields: Array of objects with column_id and appropriate value format
 
 Example initial_fields:
@@ -618,7 +722,7 @@ Example initial_fields:
 ]
 ```
 
-### 3. Update List Items
+### 4. Update List Items
 Use `update_list_item` to modify items with cell-based updates.
 - Required: list_id, cells
 - cells: Array of objects with row_id, column_id and appropriate value format
@@ -645,17 +749,17 @@ Example cells:
 ]
 ```
 
-### 4. Delete List Item
+### 5. Delete List Item
 Use `delete_list_item` to remove an item from a list.
 - Required: list_id, item_id
 
-### 5. Get Specific Item
+### 6. Get Specific Item
 Use `get_list_item` to retrieve details of a specific item.
 - Required: list_id, item_id
 - Optional: include_is_subscribed
 - Returns: item data, list metadata, and subtasks
 
-### 6. List All Items with Filtering
+### 7. List All Items with Filtering
 Use `list_items` to retrieve all items in a list with filtering and pagination.
 - Required: list_id
 - Optional: limit, cursor, archived, filters
@@ -679,7 +783,7 @@ Use `list_items` to retrieve all items in a list with filtering and pagination.
 - `in`: Value is in the provided list
 - `not_in`: Value is not in the provided list
 
-### 7. Get List Information
+### 8. Get List Information
 Use `get_list_info` to retrieve metadata about a list (not items).
 - Required: list_id
 - Returns: list metadata (name, description, channel, etc.)
@@ -705,9 +809,26 @@ Use `get_list_info` to retrieve metadata about a list (not items).
 - sort_order: asc, desc
 
 ## Workflow:
-1. Get list structure to understand columns
-2. Build initial_fields with proper column_id and format
-3. Add items to the list
-4. Update items using cells with row_id and column_id
-5. List items with filters to track progress
+1. Get schema documentation to understand field types (optional but recommended)
+2. Get list structure to understand columns (omit list_id if DEFAULT_LIST_ID is set)
+3. Build initial_fields with proper column_id and format
+4. Add items to the list (omit list_id if DEFAULT_LIST_ID is set)
+5. Update items using cells with row_id and column_id (omit list_id if DEFAULT_LIST_ID is set)
+6. List items with filters to track progress (omit list_id if DEFAULT_LIST_ID is set)
+
+## DEFAULT_LIST_ID Usage:
+When DEFAULT_LIST_ID environment variable is configured, you can simplify all tool calls:
+
+```python
+# Instead of specifying list_id every time:
+add_list_item(list_id="F1234567890", initial_fields=[...])
+
+# You can simply use:
+add_list_item(initial_fields=[...])
+
+# Same applies to all other tools:
+get_list_structure()  # Uses DEFAULT_LIST_ID
+list_items()  # Uses DEFAULT_LIST_ID
+update_list_item(cells=[...])  # Uses DEFAULT_LIST_ID
+```
 """
