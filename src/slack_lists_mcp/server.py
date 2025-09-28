@@ -69,7 +69,8 @@ async def add_list_item(
 ) -> dict[str, Any]:
     """Add a new item to a Slack list.
 
-    Use get_list_structure first to understand the column IDs and types.
+    IMPORTANT: Before using this tool, ALWAYS call get_schema_documentation to understand the correct field formats.
+    If you encounter errors, call get_schema_documentation again to verify the correct format.
 
     Args:
         initial_fields: List of field dictionaries. Each field needs:
@@ -147,9 +148,13 @@ async def add_list_item(
         logger.error(f"Error adding item: {e}")
         if ctx:
             await ctx.error(f"Failed to add item: {e!s}")
+            await ctx.info(
+                "IMPORTANT: If you encounter format errors, call get_schema_documentation to verify the correct field formats before retrying."
+            )
         return {
             "success": False,
             "error": str(e),
+            "suggestion": "If you encounter format errors, call get_schema_documentation to verify the correct field formats before retrying.",
         }
 
 
