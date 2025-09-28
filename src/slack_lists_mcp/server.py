@@ -664,7 +664,6 @@ def get_server_info() -> dict[str, Any]:
             "list_items",
             "get_list_info",
             "get_list_structure",
-            "create_list",
             "get_schema_documentation",
         ],
     }
