@@ -1,6 +1,6 @@
 [project]
 name = "slack-lists-mcp"
-version = "0.1.0"
+version = "0.1.2"
 description = "MCP server to operate Slack Lists"
 readme = "README.md"
 authors = [
@@ -43,4 +43,5 @@ dev = [
     "pytest>=8.4.2",
     "pytest-asyncio>=1.2.0",
     "ruff>=0.13.2",
+    "twine>=6.2.0",
 ]

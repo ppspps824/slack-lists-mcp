@@ -1,7 +1,6 @@
 """Tests for the Slack Lists MCP server."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
-from typing import Any
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastmcp import Client
@@ -24,7 +23,7 @@ async def test_get_list_structure_tool():
         mock_client.list_items = AsyncMock(
             return_value={
                 "items": [{"id": "test_item"}],
-            }
+            },
         )
         mock_client.get_item = AsyncMock(
             return_value={
@@ -37,13 +36,13 @@ async def test_get_list_structure_tool():
                                 "key": "name",
                                 "type": "text",
                                 "is_primary_column": True,
-                            }
+                            },
                         ],
                         "views": [],
-                    }
+                    },
                 },
                 "record": {},
-            }
+            },
         )
 
         async with Client(mcp) as client:
@@ -70,9 +69,9 @@ async def test_add_list_item_tool():
                     {
                         "column_id": "Col123",
                         "text": "Test Item",
-                    }
+                    },
                 ],
-            }
+            },
         )
 
         async with Client(mcp) as client:
@@ -90,13 +89,13 @@ async def test_add_list_item_tool():
                                         {
                                             "type": "rich_text_section",
                                             "elements": [
-                                                {"type": "text", "text": "Test Item"}
+                                                {"type": "text", "text": "Test Item"},
                                             ],
-                                        }
+                                        },
                                     ],
-                                }
+                                },
                             ],
-                        }
+                        },
                     ],
                 },
             )
@@ -130,13 +129,16 @@ async def test_update_list_item_tool():
                                         {
                                             "type": "rich_text_section",
                                             "elements": [
-                                                {"type": "text", "text": "Updated Item"}
+                                                {
+                                                    "type": "text",
+                                                    "text": "Updated Item",
+                                                },
                                             ],
-                                        }
+                                        },
                                     ],
-                                }
+                                },
                             ],
-                        }
+                        },
                     ],
                 },
             )
@@ -178,12 +180,12 @@ async def test_get_list_item_tool():
                 "record": {
                     "id": "test_item",
                     "fields": [
-                        {"column_id": "Col123", "text": "Test Item"}
+                        {"column_id": "Col123", "text": "Test Item"},
                     ],
                 },
                 "list": {"list_metadata": {"schema": []}},
                 "subtasks": [],
-            }
+            },
         )
 
         async with Client(mcp) as client:
@@ -215,7 +217,7 @@ async def test_list_items_tool():
                 "has_more": False,
                 "next_cursor": None,
                 "total": 2,
-            }
+            },
         )
 
         async with Client(mcp) as client:
@@ -243,12 +245,12 @@ async def test_list_items_with_filters():
                         "fields": [
                             {"key": "name", "text": "Test Task"},
                         ],
-                    }
+                    },
                 ],
                 "has_more": False,
                 "next_cursor": None,
                 "total": 1,
-            }
+            },
         )
 
         async with Client(mcp) as client:
@@ -283,7 +285,7 @@ async def test_list_items_with_pagination():
                 "has_more": True,
                 "next_cursor": "next_page_token",
                 "total": 100,
-            }
+            },
         )
 
         async with Client(mcp) as client:
@@ -320,7 +322,7 @@ async def test_list_items_with_archived():
                 "has_more": False,
                 "next_cursor": None,
                 "total": 0,
-            }
+            },
         )
 
         async with Client(mcp) as client:
@@ -357,7 +359,7 @@ async def test_get_list_info_tool():
                     "schema": [],
                     "views": [],
                 },
-            }
+            },
         )
 
         async with Client(mcp) as client:
@@ -379,7 +381,7 @@ async def test_error_handling():
     """Test error handling in tools."""
     with patch("slack_lists_mcp.server.slack_client") as mock_client:
         mock_client.add_item = AsyncMock(
-            side_effect=Exception("API Error")
+            side_effect=Exception("API Error"),
         )
 
         async with Client(mcp) as client:
@@ -388,7 +390,7 @@ async def test_error_handling():
                 {
                     "list_id": "test_list",
                     "initial_fields": [
-                        {"column_id": "Col123", "text": "Test"}
+                        {"column_id": "Col123", "text": "Test"},
                     ],
                 },
             )
@@ -405,10 +407,10 @@ async def test_list_operations_guide_prompt():
     """Test the list_operations_guide prompt."""
     async with Client(mcp) as client:
         result = await client.get_prompt("list-operations-guide")
-        
+
         assert result is not None
         assert len(result.messages) > 0
-        
+
         # Check that the guide contains important information
         guide_text = result.messages[0].content.text
         assert "get_list_structure" in guide_text
@@ -417,3 +419,89 @@ async def test_list_operations_guide_prompt():
         assert "delete_list_item" in guide_text
         assert "list_items" in guide_text
         assert "filters" in guide_text
+
+
+@pytest.mark.asyncio
+async def test_default_list_id_from_env():
+    """Test that tools use DEFAULT_LIST_ID from environment when list_id is not provided."""
+    with patch("slack_lists_mcp.server.settings") as mock_settings:
+        mock_settings.default_list_id = "default_list_123"
+
+        with patch("slack_lists_mcp.server.slack_client") as mock_client:
+            mock_client.add_item = AsyncMock(
+                return_value={"id": "test_item", "fields": []},
+            )
+
+            async with Client(mcp) as client:
+                result = await client.call_tool(
+                    "add_list_item",
+                    {
+                        "initial_fields": [
+                            {"column_id": "Col123", "text": "Test Item"},
+                        ],
+                    },
+                )
+
+                assert result is not None
+                result_data = result.data
+                assert result_data["success"] is True
+                # Verify that the default list ID was used
+                mock_client.add_item.assert_called_once_with(
+                    list_id="default_list_123",
+                    initial_fields=[{"column_id": "Col123", "text": "Test Item"}],
+                )
+
+
+@pytest.mark.asyncio
+async def test_missing_list_id_error():
+    """Test error when list_id is not provided and DEFAULT_LIST_ID is not set."""
+    with patch("slack_lists_mcp.server.settings") as mock_settings:
+        mock_settings.default_list_id = None
+
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "add_list_item",
+                {
+                    "initial_fields": [
+                        {"column_id": "Col123", "text": "Test Item"},
+                    ],
+                },
+            )
+
+            assert result is not None
+            result_data = result.data
+            assert result_data["success"] is False
+            assert "list_id is required" in result_data["error"]
+            assert "DEFAULT_LIST_ID environment variable" in result_data["error"]
+
+
+@pytest.mark.asyncio
+async def test_list_id_parameter_override():
+    """Test that explicitly provided list_id overrides DEFAULT_LIST_ID."""
+    with patch("slack_lists_mcp.server.settings") as mock_settings:
+        mock_settings.default_list_id = "default_list_123"
+
+        with patch("slack_lists_mcp.server.slack_client") as mock_client:
+            mock_client.add_item = AsyncMock(
+                return_value={"id": "test_item", "fields": []},
+            )
+
+            async with Client(mcp) as client:
+                result = await client.call_tool(
+                    "add_list_item",
+                    {
+                        "list_id": "explicit_list_456",
+                        "initial_fields": [
+                            {"column_id": "Col123", "text": "Test Item"},
+                        ],
+                    },
+                )
+
+                assert result is not None
+                result_data = result.data
+                assert result_data["success"] is True
+                # Verify that the explicit list ID was used, not the default
+                mock_client.add_item.assert_called_once_with(
+                    list_id="explicit_list_456",
+                    initial_fields=[{"column_id": "Col123", "text": "Test Item"}],
+                )

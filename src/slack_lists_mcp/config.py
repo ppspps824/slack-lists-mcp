@@ -61,6 +61,13 @@ class Settings(BaseSettings):
         alias="DEBUG_MODE",
     )
 
+    # Default list ID (optional)
+    default_list_id: str | None = Field(
+        default=None,
+        description="Default list ID to use when not specified in tool calls",
+        alias="DEFAULT_LIST_ID",
+    )
+
     @property
     def slack_bot_token_value(self) -> str:
         """Get the actual slack bot token value."""

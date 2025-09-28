@@ -38,6 +38,7 @@ Add to your Claude Desktop configuration file:
 | Variable | Description | Required | Default |
 |----------|-------------|----------|---------|
 | `SLACK_BOT_TOKEN` | Slack Bot User OAuth Token | ✅ | - |
+| `DEFAULT_LIST_ID` | Default list ID to use when not specified in tool calls | ❌ | - |
 | `LOG_LEVEL` | Logging level (DEBUG, INFO, WARNING, ERROR) | ❌ | INFO |
 | `SLACK_API_TIMEOUT` | Timeout for Slack API calls (seconds) | ❌ | 30 |
 | `SLACK_RETRY_COUNT` | Number of retries for failed API calls | ❌ | 3 |
@@ -52,13 +53,38 @@ Add to your Claude Desktop configuration file:
 3. Install the app to your workspace
 4. Copy the Bot User OAuth Token (starts with `xoxb-`)
 
+### Using Default List ID
+
+You can set a default list ID using the `DEFAULT_LIST_ID` environment variable. This allows you to omit the `list_id` parameter from tool calls when working with a specific list.
+
+**Example configuration:**
+```json
+{
+  "mcpServers": {
+    "slack-lists": {
+      "command": "uvx",
+      "args": ["slack-lists-mcp"],
+      "env": {
+        "SLACK_BOT_TOKEN": "xoxb-your-bot-token",
+        "DEFAULT_LIST_ID": "F1234567890"
+      }
+    }
+  }
+}
+```
+
+With this configuration, you can call tools without specifying `list_id`:
+- `add_list_item` with just `initial_fields`
+- `list_items` with just `limit` and `filters`
+- `get_list_structure` with no parameters
+
 ## Available Tools
 
 ### 1. `get_list_structure`
 Get the column structure of a Slack List.
 
 **Parameters:**
-- `list_id` (required): The ID of the list
+- `list_id` (optional): The ID of the list (uses DEFAULT_LIST_ID env var if not provided)
 
 **Returns:** Column definitions including IDs, names, types, and options
 
@@ -66,8 +92,8 @@ Get the column structure of a Slack List.
 Add a new item to a Slack List.
 
 **Parameters:**
-- `list_id` (required): The ID of the list
 - `initial_fields` (required): Array of field objects with column_id and value
+- `list_id` (optional): The ID of the list (uses DEFAULT_LIST_ID env var if not provided)
 
 **Example (Simplified format):**
 ```json
@@ -121,8 +147,8 @@ Add a new item to a Slack List.
 Update existing items in a Slack List.
 
 **Parameters:**
-- `list_id` (required): The ID of the list
 - `cells` (required): Array of cell objects with row_id, column_id, and value
+- `list_id` (optional): The ID of the list (uses DEFAULT_LIST_ID env var if not provided)
 
 **Field Formats:** (Same as add_list_item)
 - **Text fields**: Can use simple `text` key (auto-converted to rich_text)
@@ -158,22 +184,22 @@ Update existing items in a Slack List.
 Delete an item from a Slack List.
 
 **Parameters:**
-- `list_id` (required): The ID of the list
 - `item_id` (required): The ID of the item to delete
+- `list_id` (optional): The ID of the list (uses DEFAULT_LIST_ID env var if not provided)
 
 ### 5. `get_list_item`
 Get a specific item from a Slack List.
 
 **Parameters:**
-- `list_id` (required): The ID of the list
 - `item_id` (required): The ID of the item
+- `list_id` (optional): The ID of the list (uses DEFAULT_LIST_ID env var if not provided)
 - `include_is_subscribed` (optional): Include subscription status
 
 ### 6. `list_items`
 List all items in a Slack List with optional filtering.
 
 **Parameters:**
-- `list_id` (required): The ID of the list
+- `list_id` (optional): The ID of the list (uses DEFAULT_LIST_ID env var if not provided)
 - `limit` (optional): Maximum number of items (default: 100)
 - `cursor` (optional): Pagination cursor
 - `archived` (optional): Filter for archived items
@@ -203,7 +229,7 @@ List all items in a Slack List with optional filtering.
 Get metadata about a Slack List.
 
 **Parameters:**
-- `list_id` (required): The ID of the list
+- `list_id` (optional): The ID of the list (uses DEFAULT_LIST_ID env var if not provided)
 
 ## Development
 

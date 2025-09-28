@@ -128,3 +128,4 @@ def rich_text_field():
             }
         ],
     }
+

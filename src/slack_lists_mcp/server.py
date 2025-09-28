@@ -30,8 +30,8 @@ slack_client = SlackListsClient()
 
 @mcp.tool
 async def add_list_item(
-    list_id: str,
     initial_fields: list[dict[str, Any]],
+    list_id: str | None = None,
     ctx: Context = None,
 ) -> dict[str, Any]:
     """Add a new item to a Slack list.
@@ -39,10 +39,10 @@ async def add_list_item(
     Use get_list_structure first to understand the column IDs and types.
 
     Args:
-        list_id: The ID of the list
         initial_fields: List of field dictionaries. Each field needs:
                        - column_id: The column ID
                        - Value in appropriate format (rich_text, user, date, select, checkbox, etc.)
+        list_id: The ID of the list (optional, uses DEFAULT_LIST_ID env var if not provided)
         ctx: FastMCP context (automatically injected)
 
     Returns:
@@ -82,6 +82,15 @@ async def add_list_item(
 
     """
     try:
+        # Use default list ID from environment if not provided
+        if list_id is None:
+            list_id = settings.default_list_id
+            if list_id is None:
+                return {
+                    "success": False,
+                    "error": "list_id is required. Either provide it as parameter or set DEFAULT_LIST_ID environment variable.",
+                }
+
         if ctx:
             await ctx.info(
                 f"Adding item to list {list_id} with {len(initial_fields)} fields",
@@ -112,8 +121,8 @@ async def add_list_item(
 
 @mcp.tool
 async def update_list_item(
-    list_id: str,
     cells: list[dict[str, Any]],
+    list_id: str | None = None,
     ctx: Context = None,
 ) -> dict[str, Any]:
     """Update items in a Slack list.
@@ -121,11 +130,11 @@ async def update_list_item(
     Use get_list_structure first to understand the column IDs and types.
 
     Args:
-        list_id: The ID of the list
         cells: List of cell dictionaries. Each cell needs:
                - row_id: The item ID to update
                - column_id: The column ID
                - Value in appropriate format (rich_text, user, date, select, checkbox, etc.)
+        list_id: The ID of the list (optional, uses DEFAULT_LIST_ID env var if not provided)
         ctx: FastMCP context (automatically injected)
 
     Returns:
@@ -157,6 +166,15 @@ async def update_list_item(
 
     """
     try:
+        # Use default list ID from environment if not provided
+        if list_id is None:
+            list_id = settings.default_list_id
+            if list_id is None:
+                return {
+                    "success": False,
+                    "error": "list_id is required. Either provide it as parameter or set DEFAULT_LIST_ID environment variable.",
+                }
+
         if ctx:
             await ctx.info(f"Updating items in list {list_id} with {len(cells)} cells")
 
@@ -182,15 +200,15 @@ async def update_list_item(
 
 @mcp.tool
 async def delete_list_item(
-    list_id: str,
     item_id: str,
+    list_id: str | None = None,
     ctx: Context = None,
 ) -> dict[str, Any]:
     """Delete an item from a Slack list.
 
     Args:
-        list_id: The ID of the list containing the item
         item_id: The ID of the item to delete
+        list_id: The ID of the list containing the item (optional, uses DEFAULT_LIST_ID env var if not provided)
         ctx: FastMCP context (automatically injected)
 
     Returns:
@@ -198,6 +216,15 @@ async def delete_list_item(
 
     """
     try:
+        # Use default list ID from environment if not provided
+        if list_id is None:
+            list_id = settings.default_list_id
+            if list_id is None:
+                return {
+                    "success": False,
+                    "error": "list_id is required. Either provide it as parameter or set DEFAULT_LIST_ID environment variable.",
+                }
+
         if ctx:
             await ctx.info(f"Deleting item {item_id} from list {list_id}")
 
@@ -228,16 +255,16 @@ async def delete_list_item(
 
 @mcp.tool
 async def get_list_item(
-    list_id: str,
     item_id: str,
-    include_is_subscribed: bool = False,
+    list_id: str | None = None,
     ctx: Context = None,
+    include_is_subscribed: bool = False,
 ) -> dict[str, Any]:
     """Get a specific item from a Slack list.
 
     Args:
-        list_id: The ID of the list containing the item
         item_id: The ID of the item to retrieve
+        list_id: The ID of the list containing the item (optional, uses DEFAULT_LIST_ID env var if not provided)
         include_is_subscribed: Whether to include subscription status
         ctx: FastMCP context (automatically injected)
 
@@ -246,6 +273,15 @@ async def get_list_item(
 
     """
     try:
+        # Use default list ID from environment if not provided
+        if list_id is None:
+            list_id = settings.default_list_id
+            if list_id is None:
+                return {
+                    "success": False,
+                    "error": "list_id is required. Either provide it as parameter or set DEFAULT_LIST_ID environment variable.",
+                }
+
         if ctx:
             await ctx.info(f"Retrieving item {item_id} from list {list_id}")
 
@@ -277,7 +313,7 @@ async def get_list_item(
 
 @mcp.tool
 async def list_items(
-    list_id: str,
+    list_id: str | None = None,
     limit: int | None = 100,
     cursor: str | None = None,
     archived: bool | None = None,
@@ -287,7 +323,7 @@ async def list_items(
     """List all items in a Slack list with optional filtering.
 
     Args:
-        list_id: The ID of the list to retrieve items from
+        list_id: The ID of the list to retrieve items from (optional, uses DEFAULT_LIST_ID env var if not provided)
         limit: Maximum number of items to return (default: 100)
         cursor: Pagination cursor for next page
         archived: Whether to return archived items (True) or normal items (False/None)
@@ -306,6 +342,15 @@ async def list_items(
 
     """
     try:
+        # Use default list ID from environment if not provided
+        if list_id is None:
+            list_id = settings.default_list_id
+            if list_id is None:
+                return {
+                    "success": False,
+                    "error": "list_id is required. Either provide it as parameter or set DEFAULT_LIST_ID environment variable.",
+                }
+
         if ctx:
             filter_desc = f" with {len(filters)} filters" if filters else ""
             await ctx.info(f"Listing items from list {list_id}{filter_desc}")
@@ -343,13 +388,13 @@ async def list_items(
 
 @mcp.tool
 async def get_list_info(
-    list_id: str,
+    list_id: str | None = None,
     ctx: Context = None,
 ) -> dict[str, Any]:
     """Get information about a Slack list.
 
     Args:
-        list_id: The ID of the list
+        list_id: The ID of the list (optional, uses DEFAULT_LIST_ID env var if not provided)
         ctx: FastMCP context (automatically injected)
 
     Returns:
@@ -357,6 +402,15 @@ async def get_list_info(
 
     """
     try:
+        # Use default list ID from environment if not provided
+        if list_id is None:
+            list_id = settings.default_list_id
+            if list_id is None:
+                return {
+                    "success": False,
+                    "error": "list_id is required. Either provide it as parameter or set DEFAULT_LIST_ID environment variable.",
+                }
+
         if ctx:
             await ctx.info(f"Retrieving information for list {list_id}")
 
@@ -382,13 +436,13 @@ async def get_list_info(
 
 @mcp.tool
 async def get_list_structure(
-    list_id: str,
+    list_id: str | None = None,
     ctx: Context = None,
 ) -> dict[str, Any]:
     """Get the structure and column information of a Slack list.
 
     Args:
-        list_id: The ID of the list
+        list_id: The ID of the list (optional, uses DEFAULT_LIST_ID env var if not provided)
         ctx: FastMCP context (automatically injected)
 
     Returns:
@@ -396,6 +450,15 @@ async def get_list_structure(
 
     """
     try:
+        # Use default list ID from environment if not provided
+        if list_id is None:
+            list_id = settings.default_list_id
+            if list_id is None:
+                return {
+                    "success": False,
+                    "error": "list_id is required. Either provide it as parameter or set DEFAULT_LIST_ID environment variable.",
+                }
+
         if ctx:
             await ctx.info(f"Analyzing structure for list {list_id}")
 
