@@ -403,6 +403,36 @@ async def test_error_handling():
 
 
 @pytest.mark.asyncio
+async def test_add_list_item_schema_error_handling():
+    """Test that schema documentation is suggested on format errors."""
+    with patch("slack_lists_mcp.server.slack_client") as mock_client:
+        mock_client.add_item = AsyncMock(
+            side_effect=Exception(
+                "Invalid field format: column_id 'Col123' expects rich_text format",
+            ),
+        )
+
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "add_list_item",
+                {
+                    "list_id": "test_list",
+                    "initial_fields": [
+                        {"column_id": "Col123", "text": "Test"},
+                    ],
+                },
+            )
+
+            assert result is not None
+            result_data = result.data
+            assert result_data["success"] is False
+            assert "error" in result_data
+            assert "suggestion" in result_data
+            assert "get_schema_documentation" in result_data["suggestion"]
+            assert "field formats" in result_data["suggestion"]
+
+
+@pytest.mark.asyncio
 async def test_list_operations_guide_prompt():
     """Test the list_operations_guide prompt."""
     async with Client(mcp) as client:

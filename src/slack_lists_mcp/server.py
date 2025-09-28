@@ -44,7 +44,7 @@ async def fetch_slack_documentation(url: str) -> dict[str, Any]:
             response = await client.get(url)
             response.raise_for_status()
 
-            # HTMLコンテンツをそのまま返す（LLMが解析する）
+            # HTMLコンテンツをそのまま返す(LLMが解析する)
             return {
                 "url": str(response.url),  # リダイレクト後の最終URL
                 "original_url": url,
@@ -69,9 +69,6 @@ async def add_list_item(
 ) -> dict[str, Any]:
     """Add a new item to a Slack list.
 
-    IMPORTANT: Before using this tool, ALWAYS call get_schema_documentation to understand the correct field formats.
-    If you encounter errors, call get_schema_documentation again to verify the correct format.
-
     Args:
         initial_fields: List of field dictionaries. Each field needs:
                        - column_id: The column ID
@@ -82,6 +79,11 @@ async def add_list_item(
 
     Returns:
         The created item or error information
+
+    Note:
+        Before using this tool, call get_schema_documentation to understand
+        the correct field formats. If you encounter format errors, call
+        get_schema_documentation again to verify the correct format.
 
     Example:
         initial_fields = [
@@ -147,14 +149,15 @@ async def add_list_item(
     except Exception as e:
         logger.error(f"Error adding item: {e}")
         if ctx:
-            await ctx.error(f"Failed to add item: {e!s}")
-            await ctx.info(
-                "IMPORTANT: If you encounter format errors, call get_schema_documentation to verify the correct field formats before retrying."
+            await ctx.error(
+                f"Failed to add item: {e!s}\n"
+                "IMPORTANT: If you encounter format errors, call get_schema_documentation "
+                "to verify the correct field formats before retrying.",
             )
         return {
             "success": False,
             "error": str(e),
-            "suggestion": "If you encounter format errors, call get_schema_documentation to verify the correct field formats before retrying.",
+            "suggestion": "Call get_schema_documentation to verify the correct field formats before retrying.",
         }
 
 
@@ -599,7 +602,7 @@ async def get_schema_documentation(
     """Slack Lists APIのスキーマ情報とドキュメントを取得する。
 
     Args:
-        api_method: 取得したいAPIメソッド（例: slackLists.items.create）
+        api_method: 取得したいAPIメソッド(例: slackLists.items.create)
         ctx: FastMCP context (automatically injected)
 
     Returns:
@@ -652,7 +655,7 @@ async def get_schema_documentation(
 # Add a resource to show server information
 @mcp.resource("resource://server/info")
 def get_server_info() -> dict[str, Any]:
-    """Provides server configuration and status information."""
+    """Provide server configuration and status information."""
     return {
         "name": settings.mcp_server_name,
         "version": settings.mcp_server_version,
@@ -677,7 +680,7 @@ def get_server_info() -> dict[str, Any]:
 # Add a prompt template for common list operations
 @mcp.prompt("list-operations-guide")
 def list_operations_guide() -> str:
-    """Provides a guide for using Slack Lists operations."""
+    """Provide a guide for using Slack Lists operations."""
     return """
 # Slack Lists Operations Guide
 
