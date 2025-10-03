@@ -3,8 +3,6 @@
 import logging
 from typing import Any
 
-import httpx
-from bs4 import BeautifulSoup
 from fastmcp import Context, FastMCP
 
 from slack_lists_mcp.config import get_settings
@@ -28,111 +26,6 @@ mcp = FastMCP(
 
 # Initialize Slack client
 slack_client = SlackListsClient()
-
-
-async def fetch_and_format_slack_documentation() -> str:
-    """Slack APIドキュメントを動的に取得して整形する。
-
-    Returns:
-        整形されたドキュメント文字列
-
-    """
-    url = "https://docs.slack.dev/reference/methods/slackLists.items.create"
-    try:
-        async with httpx.AsyncClient(follow_redirects=True, timeout=10.0) as client:
-            response = await client.get(url)
-            response.raise_for_status()
-
-            soup = BeautifulSoup(response.text, "html.parser")
-            formatted_doc = []
-
-            # メインコンテンツを取得
-            main_content = (
-                soup.find("main")
-                or soup.find("article")
-                or soup.find("div", class_="content")
-            )
-            if not main_content:
-                return "ドキュメントの取得に失敗しました。"
-
-            # タイトルを抽出
-            title = main_content.find("h1")
-            if title:
-                formatted_doc.append(f"# {title.get_text().strip()}")
-                formatted_doc.append("")
-
-            # 説明文を抽出
-            first_p = main_content.find("p")
-            if first_p:
-                desc_text = first_p.get_text().strip()
-                if desc_text:
-                    formatted_doc.append("## 概要")
-                    formatted_doc.append(desc_text)
-                    formatted_doc.append("")
-
-            # 見出しとその内容を抽出
-            headings = main_content.find_all(["h2", "h3", "h4"])
-            for heading in headings[:20]:  # 最初の20個の見出し
-                heading_text = heading.get_text().strip()
-                if heading_text:
-                    level = int(heading.name[1])
-                    formatted_doc.append(f"{'#' * level} {heading_text}")
-
-                    # 見出しの後の要素（段落、リスト、コードブロック）を抽出
-                    current = heading
-                    content_count = 0
-                    max_content = 3  # 各見出しで最大3つの要素まで
-
-                    # 見出しの次の要素から開始
-                    while current and content_count < max_content:
-                        current = current.find_next_sibling()
-                        if not current:
-                            break
-
-                        # 次の見出しに到達したら停止
-                        if current.name in ["h1", "h2", "h3", "h4"]:
-                            break
-
-                        if current.name == "p":
-                            p_text = current.get_text().strip()
-                            if p_text and len(p_text) > 10:
-                                formatted_doc.append(p_text)
-                                content_count += 1
-                        elif current.name == "div":
-                            # Docusaurusのコードブロックを抽出
-                            classes = " ".join(current.get("class", []))
-                            if "codeBlockContainer" in classes:
-                                code_elem = current.find("code")
-                                if code_elem:
-                                    code = code_elem.get_text().strip()
-                                    if code and len(code) < 1000:
-                                        # 言語を判定
-                                        lang = "json" if "json" in classes else ""
-                                        formatted_doc.append(f"```{lang}\n{code}\n```")
-                                        content_count += 1
-                        elif current.name == "pre":
-                            # 通常のコードブロックを抽出
-                            code = current.get_text().strip()
-                            if code and len(code) < 1000:
-                                formatted_doc.append(f"```\n{code}\n```")
-                                content_count += 1
-                        elif current.name in ["ul", "ol"]:
-                            # リスト項目を抽出
-                            items = current.find_all("li", recursive=False)
-                            for item in items[:5]:
-                                item_text = item.get_text().strip()
-                                if item_text and len(item_text) < 200:
-                                    formatted_doc.append(f"- {item_text}")
-                            if items:
-                                content_count += 1
-
-                    formatted_doc.append("")
-
-            return "\n".join(formatted_doc)
-
-    except Exception as e:
-        logger.error(f"ドキュメント取得エラー: {e}")
-        return f"ドキュメントの取得に失敗しました: {e}"
 
 
 @mcp.tool
@@ -623,12 +516,202 @@ def get_server_info() -> dict[str, Any]:
 
 # Add a prompt template for Slack API documentation
 @mcp.prompt("slack-api-documentation")
-async def slack_api_documentation() -> str:
+def slack_api_documentation() -> str:
     """Provide formatted Slack API documentation for system prompt usage."""
-    # 動的にドキュメントを取得
-    dynamic_doc = await fetch_and_format_slack_documentation()
+    return """
+# slackLists.items.create method
 
-    return f"""{dynamic_doc}
+## 概要
+This method is used to create a new item, also known as a record, in an existing List.
+
+## Usage info
+This method is used to create a new item, also known as a record, in an existing List.
+The item will be created with the field values specified in the initial_fields parameter. Each field corresponds to a column in the List and must reference a valid column_id.
+
+## Sample requests data
+
+### Creating items
+
+#### Basic item creation
+Provide field values using the initial_fields parameter:
+```json
+{
+  "list_id": "F1234ABCD",
+  "initial_fields": [
+    {
+      "column_id": "Col10000000",
+      "rich_text": [
+        {
+          "type": "rich_text",
+          "elements": [
+            {
+              "type": "rich_text_section",
+              "elements": [
+                {
+                  "type": "text",
+                  "text": "Complete project documentation"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+#### Duplicating items
+Create a copy of an existing item by specifying the duplicated_item_id:
+```json
+{
+  "list_id": "F1234ABCD",
+  "duplicated_item_id": "Rec12345678"
+}
+```
+
+#### Creating subtasks
+Create a subtask by specifying the parent_item_id:
+```json
+{
+  "list_id": "F1234ABCD",
+  "parent_item_id": "Rec12345678",
+  "initial_fields": [
+    {
+      "column_id": "Col10000000",
+      "select": ["OptHIGH123"]
+    }
+  ]
+}
+```
+
+### Field types
+The initial_fields parameter supports all column types available in Lists. The supported field formats are as follows:
+
+#### Text field (rich_text)
+```json
+{
+  "column_id": "Col123",
+  "rich_text": [
+    {
+      "type": "rich_text",
+      "elements": [
+        {
+          "type": "rich_text_section",
+          "elements": [
+            {
+              "type": "text",
+              "text": "Your text content"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+#### User field
+```json
+{
+  "column_id": "Col123",
+  "user": ["U1234567", "U2345678"]
+}
+```
+
+#### Date field
+```json
+{
+  "column_id": "Col123",
+  "date": ["2024-12-31"]
+}
+```
+
+#### Select field
+```json
+{
+  "column_id": "Col123",
+  "select": ["OptionId123"]
+}
+```
+
+#### Checkbox field
+```json
+{
+  "column_id": "Col123",
+  "checkbox": true
+}
+```
+
+#### Number field
+```json
+{
+  "column_id": "Col123",
+  "number": [5000]
+}
+```
+
+#### Email Field
+```json
+{
+  "column_id": "Col123",
+  "email": ["contact@example.com"]
+}
+```
+
+#### Phone field
+```json
+{
+  "column_id": "Col123",
+  "phone": ["+1-555-123-4567"]
+}
+```
+
+#### Attachment field
+```json
+{
+  "column_id": "Col123",
+  "attachment": ["F1234567890"]
+}
+```
+
+#### Link field
+```json
+{
+  "column_id": "Col123",
+  "link": [
+    {
+      "original_url": "https://example.com",
+      "display_as_url": false,
+      "display_name": "Example Website"
+    }
+  ]
+}
+```
+
+#### Message field
+```json
+{
+  "column_id": "Col123",
+  "message": ["https://yourteam.slack.com/archives/C1234567890/p1234567890123456"]
+}
+```
+
+#### Rating field
+```json
+{
+  "column_id": "Col123",
+  "rating": [4]
+}
+```
+
+#### Timestamp Field
+```json
+{
+  "column_id": "Col123",
+  "timestamp": [1704067200]
+}
+```
 
 ---
 
@@ -648,4 +731,9 @@ async def slack_api_documentation() -> str:
 - `not_contains`: 部分文字列を含まない
 - `in`: 指定されたリストに値が含まれる
 - `not_in`: 指定されたリストに値が含まれない
+
+## ドキュメント出典
+
+このドキュメントは、Slack公式ドキュメント (https://docs.slack.dev/reference/methods/slackLists.items.create) に基づいて作成されています。
+最新の情報については、公式ドキュメントを参照してください。
 """
