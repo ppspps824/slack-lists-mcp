@@ -4,6 +4,7 @@ import logging
 from typing import Any
 
 import httpx
+from bs4 import BeautifulSoup
 from fastmcp import Context, FastMCP
 
 from slack_lists_mcp.config import get_settings
@@ -29,36 +30,109 @@ mcp = FastMCP(
 slack_client = SlackListsClient()
 
 
-async def fetch_slack_documentation(url: str) -> dict[str, Any]:
-    """Slack APIドキュメントをフェッチして解析する。
-
-    Args:
-        url: Slack APIドキュメントのURL
+async def fetch_and_format_slack_documentation() -> str:
+    """Slack APIドキュメントを動的に取得して整形する。
 
     Returns:
-        解析されたドキュメント情報
+        整形されたドキュメント文字列
 
     """
+    url = "https://docs.slack.dev/reference/methods/slackLists.items.create"
     try:
-        async with httpx.AsyncClient(follow_redirects=True) as client:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=10.0) as client:
             response = await client.get(url)
             response.raise_for_status()
 
-            # HTMLコンテンツをそのまま返す(LLMが解析する)
-            return {
-                "url": str(response.url),  # リダイレクト後の最終URL
-                "original_url": url,
-                "status_code": response.status_code,
-                "content_length": len(response.content),
-                "html_content": response.text,
-                "message": "ドキュメントが正常に取得されました",
-            }
+            soup = BeautifulSoup(response.text, "html.parser")
+            formatted_doc = []
+
+            # メインコンテンツを取得
+            main_content = (
+                soup.find("main")
+                or soup.find("article")
+                or soup.find("div", class_="content")
+            )
+            if not main_content:
+                return "ドキュメントの取得に失敗しました。"
+
+            # タイトルを抽出
+            title = main_content.find("h1")
+            if title:
+                formatted_doc.append(f"# {title.get_text().strip()}")
+                formatted_doc.append("")
+
+            # 説明文を抽出
+            first_p = main_content.find("p")
+            if first_p:
+                desc_text = first_p.get_text().strip()
+                if desc_text:
+                    formatted_doc.append("## 概要")
+                    formatted_doc.append(desc_text)
+                    formatted_doc.append("")
+
+            # 見出しとその内容を抽出
+            headings = main_content.find_all(["h2", "h3", "h4"])
+            for heading in headings[:20]:  # 最初の20個の見出し
+                heading_text = heading.get_text().strip()
+                if heading_text:
+                    level = int(heading.name[1])
+                    formatted_doc.append(f"{'#' * level} {heading_text}")
+
+                    # 見出しの後の要素（段落、リスト、コードブロック）を抽出
+                    current = heading
+                    content_count = 0
+                    max_content = 3  # 各見出しで最大3つの要素まで
+
+                    # 見出しの次の要素から開始
+                    while current and content_count < max_content:
+                        current = current.find_next_sibling()
+                        if not current:
+                            break
+
+                        # 次の見出しに到達したら停止
+                        if current.name in ["h1", "h2", "h3", "h4"]:
+                            break
+
+                        if current.name == "p":
+                            p_text = current.get_text().strip()
+                            if p_text and len(p_text) > 10:
+                                formatted_doc.append(p_text)
+                                content_count += 1
+                        elif current.name == "div":
+                            # Docusaurusのコードブロックを抽出
+                            classes = " ".join(current.get("class", []))
+                            if "codeBlockContainer" in classes:
+                                code_elem = current.find("code")
+                                if code_elem:
+                                    code = code_elem.get_text().strip()
+                                    if code and len(code) < 1000:
+                                        # 言語を判定
+                                        lang = "json" if "json" in classes else ""
+                                        formatted_doc.append(f"```{lang}\n{code}\n```")
+                                        content_count += 1
+                        elif current.name == "pre":
+                            # 通常のコードブロックを抽出
+                            code = current.get_text().strip()
+                            if code and len(code) < 1000:
+                                formatted_doc.append(f"```\n{code}\n```")
+                                content_count += 1
+                        elif current.name in ["ul", "ol"]:
+                            # リスト項目を抽出
+                            items = current.find_all("li", recursive=False)
+                            for item in items[:5]:
+                                item_text = item.get_text().strip()
+                                if item_text and len(item_text) < 200:
+                                    formatted_doc.append(f"- {item_text}")
+                            if items:
+                                content_count += 1
+
+                    formatted_doc.append("")
+
+            return "\n".join(formatted_doc)
+
     except Exception as e:
         logger.error(f"ドキュメント取得エラー: {e}")
-        return {
-            "error": str(e),
-            "url": url,
-        }
+        return f"ドキュメントの取得に失敗しました: {e}"
 
 
 @mcp.tool
@@ -79,43 +153,6 @@ async def add_list_item(
 
     Returns:
         The created item or error information
-
-    Note:
-        Before using this tool, call get_schema_documentation to understand
-        the correct field formats. If you encounter format errors, call
-        get_schema_documentation again to verify the correct format.
-
-    Example:
-        initial_fields = [
-            {
-                "column_id": "Col123",
-                "text": "Task Name"  # Plain text will be auto-converted to rich_text
-            },
-            {
-                "column_id": "Col456",
-                "checkbox": False
-            },
-            {
-                "column_id": "Col789",
-                "select": "OptABC123"  # Single value will be auto-wrapped in array
-            },
-            {
-                "column_id": "Col012",
-                "user": "U123456"  # Single user ID will be auto-wrapped in array
-            }
-        ]
-
-        # Alternative: You can also provide the full rich_text format:
-        {
-            "column_id": "Col123",
-            "rich_text": [{
-                "type": "rich_text",
-                "elements": [{
-                    "type": "rich_text_section",
-                    "elements": [{"type": "text", "text": "Task Name"}]
-                }]
-            }]
-        }
 
     """
     try:
@@ -149,15 +186,10 @@ async def add_list_item(
     except Exception as e:
         logger.error(f"Error adding item: {e}")
         if ctx:
-            await ctx.error(
-                f"Failed to add item: {e!s}\n"
-                "IMPORTANT: If you encounter format errors, call get_schema_documentation "
-                "to verify the correct field formats before retrying.",
-            )
+            await ctx.error(f"Failed to add item: {e!s}")
         return {
             "success": False,
             "error": str(e),
-            "suggestion": "Call get_schema_documentation to verify the correct field formats before retrying.",
         }
 
 
@@ -183,29 +215,6 @@ async def update_list_item(
     Returns:
         Success status or error information
 
-    Example:
-        cells = [
-            {
-                "row_id": "Rec123",
-                "column_id": "Col123",
-                "text": "Updated Name"  # Plain text will be auto-converted to rich_text
-            },
-            {
-                "row_id": "Rec123",
-                "column_id": "Col456",
-                "checkbox": True
-            },
-            {
-                "row_id": "Rec123",
-                "column_id": "Col789",
-                "select": "OptXYZ456"  # Single value will be auto-wrapped in array
-            },
-            {
-                "row_id": "Rec123",
-                "column_id": "Col012",
-                "user": "U789012"  # Single user ID will be auto-wrapped in array
-            }
-        ]
 
     """
     try:
@@ -371,12 +380,6 @@ async def list_items(
         cursor: Pagination cursor for next page
         archived: Whether to return archived items (True) or normal items (False/None)
         filters: Column filters. Keys are column IDs or keys, values are filter conditions.
-                Example: {
-                    "name": {"contains": "タスク"},
-                    "Col09HEURLL6A": {"equals": "OptRCQF2AM6"},  # Status filter
-                    "todo_completed": {"equals": True},  # Completed filter
-                    "Col09H0PTP23Z": {"in": ["U123", "U456"]},  # Assignee filter
-                }
                 Supported operators: equals, not_equals, contains, not_contains, in, not_in
         ctx: FastMCP context (automatically injected)
 
@@ -594,64 +597,6 @@ async def get_list_structure(
         }
 
 
-@mcp.tool
-async def get_schema_documentation(
-    api_method: str = "slackLists.items.create",
-    ctx: Context = None,
-) -> dict[str, Any]:
-    """Slack Lists APIのスキーマ情報とドキュメントを取得する。
-
-    Args:
-        api_method: 取得したいAPIメソッド(例: slackLists.items.create)
-        ctx: FastMCP context (automatically injected)
-
-    Returns:
-        スキーマ情報とドキュメントの詳細
-
-    """
-    try:
-        if ctx:
-            await ctx.info(f"スキーマ情報を取得中: {api_method}")
-
-        # Slack APIドキュメントのURLを構築
-        doc_url = f"https://docs.slack.dev/reference/methods/{api_method}"
-
-        # ドキュメントをフェッチ
-        doc_info = await fetch_slack_documentation(doc_url)
-
-        if "error" in doc_info:
-            error_msg = f"ドキュメント取得エラー: {doc_info['error']}"
-            if ctx:
-                await ctx.error(error_msg)
-            return {
-                "success": False,
-                "error": error_msg,
-            }
-
-        if ctx:
-            await ctx.info("スキーマ情報の取得が完了しました")
-
-        return {
-            "success": True,
-            "api_method": api_method,
-            "documentation_url": doc_info.get("url", doc_url),
-            "original_url": doc_info.get("original_url", doc_url),
-            "html_content": doc_info.get("html_content", ""),
-            "content_length": doc_info.get("content_length", 0),
-            "status_code": doc_info.get("status_code", 200),
-            "message": "Slack APIドキュメントを取得しました。HTMLコンテンツをLLMが解析してスキーマ情報を抽出できます。",
-        }
-
-    except Exception as e:
-        logger.error(f"スキーマ情報取得エラー: {e}")
-        if ctx:
-            await ctx.error(f"スキーマ情報の取得に失敗しました: {e!s}")
-        return {
-            "success": False,
-            "error": str(e),
-        }
-
-
 # Add a resource to show server information
 @mcp.resource("resource://server/info")
 def get_server_info() -> dict[str, Any]:
@@ -672,170 +617,35 @@ def get_server_info() -> dict[str, Any]:
             "list_items",
             "get_list_info",
             "get_list_structure",
-            "get_schema_documentation",
         ],
     }
 
 
-# Add a prompt template for common list operations
-@mcp.prompt("list-operations-guide")
-def list_operations_guide() -> str:
-    """Provide a guide for using Slack Lists operations."""
-    return """
-# Slack Lists Operations Guide
+# Add a prompt template for Slack API documentation
+@mcp.prompt("slack-api-documentation")
+async def slack_api_documentation() -> str:
+    """Provide formatted Slack API documentation for system prompt usage."""
+    # 動的にドキュメントを取得
+    dynamic_doc = await fetch_and_format_slack_documentation()
 
-## IMPORTANT: DEFAULT_LIST_ID is automatically used!
-When `DEFAULT_LIST_ID` environment variable is set, you can omit the `list_id` parameter from all tool calls. The system will automatically use the configured default list.
+    return f"""{dynamic_doc}
 
-## IMPORTANT: Always start by getting list structure!
-Before adding or updating items, use `get_list_structure` to understand the column IDs and types.
+---
 
-## Available Operations:
+## 重要な注意事項
 
-### 1. Get Schema Documentation
-Use `get_schema_documentation` to fetch the latest Slack API documentation.
-- Required: api_method (default: "slackLists.items.create")
-- Returns: HTML content from Slack API docs that LLM can parse for field types and examples
-- This provides the most up-to-date information about field formats
+1. **リスト構造の理解**: アイテムを追加または更新する前に、`get_list_structure`を使用してリストの列構造を理解してください。
 
-### 2. Get List Structure (REQUIRED FIRST)
-Use `get_list_structure` to get column definitions for a list.
-- Required: list_id
-- Returns: Column IDs, names, types, and options needed for adding/updating items
+2. **DEFAULT_LIST_IDの活用**: 環境変数`DEFAULT_LIST_ID`が設定されている場合、すべてのツール呼び出しで`list_id`パラメータを省略できます。
 
-### 3. Add Item to List
-Use `add_list_item` to add a new item with raw field structure.
-- Required: initial_fields
-- Optional: list_id (uses DEFAULT_LIST_ID if not provided)
-- initial_fields: Array of objects with column_id and appropriate value format
+## フィルター演算子
 
-Example initial_fields:
-```
-[
-  {
-    "column_id": "Col123",
-    "rich_text": [{
-      "type": "rich_text",
-      "elements": [{
-        "type": "rich_text_section",
-        "elements": [{"type": "text", "text": "Task Name"}]
-      }]
-    }]
-  },
-  {
-    "column_id": "Col456",
-    "user": ["U123456"]
-  }
-]
-```
+リストアイテムを検索する際に使用できる演算子：
 
-### 4. Update List Items
-Use `update_list_item` to modify items with cell-based updates.
-- Required: list_id, cells
-- cells: Array of objects with row_id, column_id and appropriate value format
-
-Example cells:
-```
-[
-  {
-    "row_id": "Rec123",
-    "column_id": "Col123",
-    "rich_text": [{
-      "type": "rich_text",
-      "elements": [{
-        "type": "rich_text_section",
-        "elements": [{"type": "text", "text": "Updated Task"}]
-      }]
-    }]
-  },
-  {
-    "row_id": "Rec123",
-    "column_id": "Col456",
-    "checkbox": true
-  }
-]
-```
-
-### 5. Delete List Item
-Use `delete_list_item` to remove an item from a list.
-- Required: list_id, item_id
-
-### 6. Get Specific Item
-Use `get_list_item` to retrieve details of a specific item.
-- Required: list_id, item_id
-- Optional: include_is_subscribed
-- Returns: item data, list metadata, and subtasks
-
-### 7. List All Items with Filtering
-Use `list_items` to retrieve all items in a list with filtering and pagination.
-- Required: list_id
-- Optional: limit, cursor, archived, filters
-- Returns: items array, pagination info
-
-**Filter Examples:**
-```json
-{
-  "name": {"contains": "タスク"},
-  "Col09HEURLL6A": {"equals": "OptRCQF2AM6"},
-  "todo_completed": {"equals": true},
-  "Col09H0PTP23Z": {"in": ["U123", "U456"]}
-}
-```
-
-**Supported Filter Operators:**
-- `equals`: Exact match
-- `not_equals`: Not equal to value
-- `contains`: Contains substring (case-insensitive)
-- `not_contains`: Does not contain substring
-- `in`: Value is in the provided list
-- `not_in`: Value is not in the provided list
-
-### 8. Get List Information
-Use `get_list_info` to retrieve metadata about a list (not items).
-- Required: list_id
-- Returns: list metadata (name, description, channel, etc.)
-
-## Field Type Formats:
-- Text: `rich_text` - Array of rich text blocks
-- User: `user` - Array of user IDs
-- Date: `date` - Array of date strings (YYYY-MM-DD)
-- Select: `select` - Array of option IDs
-- Checkbox: `checkbox` - Boolean value
-- Number: `number` - Array of numbers
-- Email: `email` - Array of email addresses
-- Phone: `phone` - Array of phone numbers
-- Channel: `channel` - Array of channel IDs
-- Rating: `rating` - Array of integers
-- Timestamp: `timestamp` - Array of unix timestamps
-- Attachment: `attachment` - Array of file IDs
-- Link: `link` - Array of link objects with url property
-- Reference: `reference` - Array of reference IDs
-
-## Sort Options:
-- sort_by: created_at, updated_at, due_date, priority
-- sort_order: asc, desc
-
-## Workflow:
-1. Get schema documentation to understand field types (optional but recommended)
-2. Get list structure to understand columns (omit list_id if DEFAULT_LIST_ID is set)
-3. Build initial_fields with proper column_id and format
-4. Add items to the list (omit list_id if DEFAULT_LIST_ID is set)
-5. Update items using cells with row_id and column_id (omit list_id if DEFAULT_LIST_ID is set)
-6. List items with filters to track progress (omit list_id if DEFAULT_LIST_ID is set)
-
-## DEFAULT_LIST_ID Usage:
-When DEFAULT_LIST_ID environment variable is configured, you can simplify all tool calls:
-
-```python
-# Instead of specifying list_id every time:
-add_list_item(list_id="F1234567890", initial_fields=[...])
-
-# You can simply use:
-add_list_item(initial_fields=[...])
-
-# Same applies to all other tools:
-get_list_structure()  # Uses DEFAULT_LIST_ID
-list_items()  # Uses DEFAULT_LIST_ID
-update_list_item(cells=[...])  # Uses DEFAULT_LIST_ID
-```
+- `equals`: 完全一致
+- `not_equals`: 値が等しくない
+- `contains`: 部分文字列を含む（大文字小文字を区別しない）
+- `not_contains`: 部分文字列を含まない
+- `in`: 指定されたリストに値が含まれる
+- `not_in`: 指定されたリストに値が含まれない
 """
