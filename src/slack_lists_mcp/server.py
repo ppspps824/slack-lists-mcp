@@ -1,9 +1,10 @@
 """FastMCP server for Slack Lists API operations."""
 
 import logging
-from typing import Any
+from typing import Annotated, Any
 
 from fastmcp import Context, FastMCP
+from pydantic import Field
 
 from slack_lists_mcp.config import get_settings
 from slack_lists_mcp.slack_client import SlackListsClient
@@ -30,7 +31,24 @@ slack_client = SlackListsClient()
 
 @mcp.tool
 async def add_list_item(
-    initial_fields: list[dict[str, Any]],
+    initial_fields: Annotated[
+        list[dict[str, Any]],
+        Field(
+            description=(
+                "List of field dictionaries. Each field MUST have "
+                "'column_id' and a value field. "
+                "Supported value fields: 'text' (string), "
+                "'user' (list of user IDs), "
+                "'date' (list of date strings), "
+                "'select' (list of option IDs), "
+                "'checkbox' (boolean), 'number' (list of numbers), etc. "
+                "Use get_list_structure to find correct column IDs. "
+                "Example: [{'column_id': 'Col123', 'text': 'Task name'}, "
+                "{'column_id': 'Col456', 'user': ['U123456']}]"
+            ),
+            min_length=1,
+        ),
+    ],
     list_id: str | None = None,
     ctx: Context = None,
 ) -> dict[str, Any]:
@@ -101,7 +119,24 @@ async def add_list_item(
 
 @mcp.tool
 async def update_list_item(
-    cells: list[dict[str, Any]],
+    cells: Annotated[
+        list[dict[str, Any]],
+        Field(
+            description=(
+                "List of cell dictionaries. Each cell MUST have "
+                "'row_id', 'column_id', and a value field. "
+                "Supported value fields: 'text' (string), "
+                "'user' (list of user IDs), "
+                "'date' (list of date strings), "
+                "'select' (list of option IDs), "
+                "'checkbox' (boolean), 'number' (list of numbers), etc. "
+                "Use get_list_structure to find correct column IDs. "
+                "Example: [{'row_id': 'Rec123', "
+                "'column_id': 'Col123', 'text': 'Updated name'}]"
+            ),
+            min_length=1,
+        ),
+    ],
     list_id: str | None = None,
     ctx: Context = None,
 ) -> dict[str, Any]:

@@ -268,7 +268,7 @@ async def test_list_items_with_filters():
             # Check that filters were passed to the client
             mock_client.list_items.assert_called_once_with(
                 list_id="test_list",
-                limit=100,
+                limit=20,
                 cursor=None,
                 archived=None,
                 filters={"name": {"contains": "Test"}},
@@ -339,7 +339,7 @@ async def test_list_items_with_archived():
             assert result_data["success"] is True
             mock_client.list_items.assert_called_once_with(
                 list_id="test_list",
-                limit=100,
+                limit=20,
                 cursor=None,
                 archived=True,
                 filters=None,
@@ -427,28 +427,27 @@ async def test_add_list_item_schema_error_handling():
             result_data = result.data
             assert result_data["success"] is False
             assert "error" in result_data
-            assert "suggestion" in result_data
-            assert "get_schema_documentation" in result_data["suggestion"]
-            assert "field formats" in result_data["suggestion"]
+            assert "hint" in result_data
+            assert "get_list_structure" in result_data["hint"]
+            assert "column IDs" in result_data["hint"]
 
 
 @pytest.mark.asyncio
-async def test_list_operations_guide_prompt():
-    """Test the list_operations_guide prompt."""
+async def test_slack_api_documentation_prompt():
+    """Test the slack-api-documentation prompt."""
     async with Client(mcp) as client:
-        result = await client.get_prompt("list-operations-guide")
+        result = await client.get_prompt("slack-api-documentation")
 
         assert result is not None
         assert len(result.messages) > 0
 
         # Check that the guide contains important information
         guide_text = result.messages[0].content.text
-        assert "get_list_structure" in guide_text
-        assert "add_list_item" in guide_text
-        assert "update_list_item" in guide_text
-        assert "delete_list_item" in guide_text
-        assert "list_items" in guide_text
-        assert "filters" in guide_text
+        assert "slackLists.items.create" in guide_text
+        assert "initial_fields" in guide_text
+        assert "column_id" in guide_text
+        assert "rich_text" in guide_text
+        assert "user" in guide_text
 
 
 @pytest.mark.asyncio

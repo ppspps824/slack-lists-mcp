@@ -253,6 +253,7 @@ async def test_list_items_with_filters(mock_slack_client):
 
     result = await client.list_items(
         list_id="F123",
+        limit=100,
         filters={"name": {"contains": "Test"}},
     )
 

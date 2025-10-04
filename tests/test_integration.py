@@ -178,7 +178,7 @@ class TestSlackListsIntegration:
                 # The client will filter client-side, so check the mock was called
                 mock_client.list_items.assert_called_with(
                     list_id="F123",
-                    limit=100,  # Server passes limit directly to client
+                    limit=20,  # Server default limit is 20
                     cursor=None,
                     archived=None,
                     filters={"name": {"contains": "Task"}},
