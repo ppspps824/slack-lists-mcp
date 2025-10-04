@@ -180,7 +180,7 @@ class SlackListsClient:
                     ]
                 ):
                     raise ValueError(
-                        f"Field with column_id '{field.get('column_id')}' must have a value (text, rich_text, user, select, etc.)"
+                        f"Field with column_id '{field.get('column_id')}' must have a value (text, rich_text, user, select, etc.)",
                     )
 
             # Normalize field formats for better usability
