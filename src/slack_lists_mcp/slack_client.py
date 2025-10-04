@@ -363,7 +363,7 @@ class SlackListsClient:
     async def list_items(
         self,
         list_id: str,
-        limit: int = 100,
+        limit: int = 20,
         cursor: str | None = None,
         archived: bool | None = None,
         filters: dict[str, dict[str, Any]] | None = None,

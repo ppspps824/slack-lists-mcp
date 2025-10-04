@@ -259,7 +259,7 @@ async def get_list_item(
 @mcp.tool
 async def list_items(
     list_id: str | None = None,
-    limit: int | None = 100,
+    limit: int | None = 20,
     cursor: str | None = None,
     archived: bool | None = None,
     filters: dict[str, dict[str, Any]] | None = None,
@@ -269,7 +269,7 @@ async def list_items(
 
     Args:
         list_id: The ID of the list to retrieve items from (optional, uses DEFAULT_LIST_ID env var if not provided)
-        limit: Maximum number of items to return (default: 100)
+        limit: Maximum number of items to return (default: 20)
         cursor: Pagination cursor for next page
         archived: Whether to return archived items (True) or normal items (False/None)
         filters: Column filters. Keys are column IDs or keys, values are filter conditions.
@@ -296,7 +296,7 @@ async def list_items(
 
         response = await slack_client.list_items(
             list_id=list_id,
-            limit=limit or 100,
+            limit=limit or 20,
             cursor=cursor,
             archived=archived,
             filters=filters,
