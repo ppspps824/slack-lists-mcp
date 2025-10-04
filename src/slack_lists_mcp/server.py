@@ -36,16 +36,28 @@ async def add_list_item(
 ) -> dict[str, Any]:
     """Add a new item to a Slack list.
 
+    IMPORTANT: Use get_list_structure first to understand the correct column IDs and field formats.
+
     Args:
         initial_fields: List of field dictionaries. Each field needs:
-                       - column_id: The column ID
-                       - Value in appropriate format (rich_text, user, date, select, checkbox, etc.)
+                       - column_id: The column ID (get from get_list_structure)
+                       - Value in appropriate format (text, rich_text, user, date, select, checkbox, etc.)
         list_id: The ID of the list (optional, uses DEFAULT_LIST_ID env var if not provided)
                  When DEFAULT_LIST_ID is set, you can omit this parameter entirely
         ctx: FastMCP context (automatically injected)
 
     Returns:
         The created item or error information
+
+    Example:
+        # First get the list structure
+        structure = await get_list_structure()
+
+        # Then use the correct column IDs
+        initial_fields = [
+            {"column_id": "Col08N4PWM7PZ", "text": "Task name"},
+            {"column_id": "Col08NWP011DF", "user": ["U123456"]}
+        ]
 
     """
     try:
@@ -83,6 +95,7 @@ async def add_list_item(
         return {
             "success": False,
             "error": str(e),
+            "hint": "Use get_list_structure first to understand the correct column IDs and field formats",
         }
 
 

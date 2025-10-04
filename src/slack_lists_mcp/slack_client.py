@@ -161,6 +161,28 @@ class SlackListsClient:
             if not initial_fields:
                 raise ValueError("At least one field must be provided")
 
+            # Validate required fields
+            for field in initial_fields:
+                if "column_id" not in field:
+                    raise ValueError("Each field must have a 'column_id'")
+                if not any(
+                    key in field
+                    for key in [
+                        "text",
+                        "rich_text",
+                        "user",
+                        "select",
+                        "checkbox",
+                        "date",
+                        "number",
+                        "email",
+                        "phone",
+                    ]
+                ):
+                    raise ValueError(
+                        f"Field with column_id '{field.get('column_id')}' must have a value (text, rich_text, user, select, etc.)"
+                    )
+
             # Normalize field formats for better usability
             normalized_fields = self._normalize_fields(initial_fields)
 
